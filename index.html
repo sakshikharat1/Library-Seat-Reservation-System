@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Library Seat Reservation</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
+<style>
+:root{--bg:#eef2f1;--card:#fff;--ink:#14262b;--mute:#5b6b6f;--line:#d5dddc;--acc:#1b6b5a;--acc-ink:#fff;--free:#e3f1ec;--taken:#d9dee0;--mine:#f2c14e;--bad:#b3261e;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1b1e;--card:#162428;--ink:#e6efee;--mute:#92a5a8;--line:#2a3d41;--acc:#4fc1a6;--acc-ink:#07201a;--free:#1d3a35;--taken:#2a363a;--mine:#d9a82f;--bad:#ff8a80;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1b1e;--card:#162428;--ink:#e6efee;--mute:#92a5a8;--line:#2a3d41;--acc:#4fc1a6;--acc-ink:#07201a;--free:#1d3a35;--taken:#2a363a;--mine:#d9a82f;--bad:#ff8a80;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+h1,h2,h3{font-family:"Newsreader",Georgia,serif;font-weight:600;margin:0 0 .5rem;letter-spacing:-.01em}
+h1{font-size:1.7rem}h2{font-size:1.3rem}h3{font-size:1.05rem}
+.wrap{max-width:900px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--acc);color:var(--acc-ink);border:0;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.danger{background:transparent;color:var(--bad);border:1px solid var(--bad)}
+button:disabled{opacity:.45;cursor:not-allowed}
+:focus-visible{outline:3px solid var(--mine);outline-offset:2px}
+input,select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+label{display:block;font-size:.85rem;color:var(--mute);margin:10px 0 4px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}.row>*{flex:1 1 140px}
+.tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.tabs button{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.tabs button.on{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}
+.zone{margin:14px 0 6px;color:var(--mute);font-size:.85rem}
+.seats{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px}
+.seat{padding:10px 0;text-align:center;border-radius:8px;border:1px solid var(--line);background:var(--free);color:var(--ink);font-weight:600}
+.seat.taken{background:var(--taken);color:var(--mute);cursor:not-allowed;text-decoration:line-through}
+.seat.mine{background:var(--mine);color:#2b2100;border-color:var(--mine)}
+.seat.sel{outline:3px solid var(--acc);outline-offset:1px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.85rem;color:var(--mute);margin:8px 0}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid var(--line)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:520px}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);font-size:.9rem}
+th{color:var(--mute);font-weight:500}
+.tag{padding:2px 8px;border-radius:99px;font-size:.78rem;background:var(--free)}
+.tag.x{background:var(--taken);color:var(--mute)}
+.msg{padding:10px 12px;border-radius:8px;margin-bottom:12px;background:var(--free)}
+.msg.err{background:transparent;border:1px solid var(--bad);color:var(--bad)}
+.bar{height:10px;background:var(--taken);border-radius:5px;overflow:hidden;margin-top:4px}.bar>div{height:100%;background:var(--acc)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:12px}
+.stat{border:1px solid var(--line);border-radius:8px;padding:10px}.stat b{font-size:1.5rem;display:block;font-family:"Newsreader",Georgia,serif}
+.muted{color:var(--mute)}.hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>
+const SLOTS=[{id:"s1",label:"9:00 – 11:00",h:9},{id:"s2",label:"11:00 – 13:00",h:11},{id:"s3",label:"14:00 – 16:00",h:14},{id:"s4",label:"16:00 – 18:00",h:16}];
+const ADMIN={user:"admin",pass:"admin123"};
+const KEY="libseat.v1";
+let mem=null;
+function seed(){const seats=[];let id=1;["A","B","C","D"].forEach((z,zi)=>{for(let n=1;n<=6;n++)seats.push({id:id++,label:z+n,zone:["Quiet room","Quiet room","Reading hall","Reading hall"][zi]})});return{students:[],seats,reservations:[],nid:100}}
+function load(){try{const r=localStorage.getItem(KEY);if(r)return JSON.parse(r)}catch(e){}return mem||seed()}
+let db=load();
+function save(){mem=db;try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
+let S={user:null,admin:false,tab:"book",mode:"login",date:today(),slot:SLOTS[0].id,sel:null,msg:null,err:false,adminLogin:false};
+function today(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+const slotOf=id=>SLOTS.find(s=>s.id===id);
+const active=()=>db.reservations.filter(r=>r.status==="active");
+const taker=(seat,date,slot)=>active().find(r=>r.seatId===seat&&r.date===date&&r.slot===slot);
+function isPast(date,slot){const t=today();if(date<t)return true;if(date>t)return false;return new Date().getHours()>=slotOf(slot).h+2}
+function flash(m,err){S.msg=m;S.err=!!err}
+function book(){
+ if(!S.sel)return flash("Pick a seat first.",1);
+ if(isPast(S.date,S.slot))return flash("That time slot has already ended.",1);
+ if(taker(S.sel,S.date,S.slot))return flash("Someone just booked that seat. Pick another.",1);
+ if(active().some(r=>r.studentId===S.user.id&&r.date===S.date&&r.slot===S.slot))return flash("You already have a seat for this time slot.",1);
+ db.reservations.push({id:db.nid++,studentId:S.user.id,seatId:S.sel,date:S.date,slot:S.slot,status:"active",created:Date.now()});
+ save();const seat=db.seats.find(x=>x.id===S.sel);S.sel=null;flash("Booked seat "+seat.label+" on "+S.date+", "+slotOf(S.slot).label+".");
+}
+function cancel(id){const r=db.reservations.find(x=>x.id===id);if(r){r.status="cancelled";save();flash("Reservation cancelled.")}}
+function seatGrid(){
+ const zones=[...new Set(db.seats.map(s=>s.zone))];
+ return zones.map(z=>`<div class="zone">${esc(z)}</div><div class="seats">`+db.seats.filter(s=>s.zone===z).map(s=>{
+  const t=taker(s.id,S.date,S.slot);const mine=t&&t.studentId===S.user.id;
+  const cls=mine?"mine":t?"taken":"";
+  return `<button class="seat ${cls} ${S.sel===s.id?"sel":""}" data-act="pick" data-id="${s.id}" ${t?"disabled":""} aria-label="Seat ${esc(s.label)} ${mine?"booked by you":t?"taken":"free"}">${esc(s.label)}</button>`}).join("")+`</div>`).join("");
+}
+function bookView(){
+ const free=db.seats.filter(s=>!taker(s.id,S.date,S.slot)).length;
+ return `<div class="card"><h2>Find a seat</h2>
+ <div class="row"><div><label for="d">Date</label><input id="d" type="date" min="${today()}" value="${S.date}" data-act="date"></div>
+ <div><label for="sl">Time slot</label><select id="sl" data-act="slot">${SLOTS.map(s=>`<option value="${s.id}" ${s.id===S.slot?"selected":""} ${isPast(S.date,s.id)?"disabled":""}>${s.label}</option>`).join("")}</select></div></div>
+ <p class="muted">${free} of ${db.seats.length} seats free for this slot.</p>
+ <div class="legend"><span><i style="background:var(--free)"></i>Free</span><span><i style="background:var(--taken)"></i>Taken</span><span><i style="background:var(--mine)"></i>Yours</span></div>
+ ${seatGrid()}
+ <p><button data-act="book" ${S.sel?"":"disabled"}>${S.sel?"Reserve seat "+esc(db.seats.find(x=>x.id===S.sel).label):"Reserve seat"}</button></p></div>`;
+}
+function resTable(list,admin){
+ if(!list.length)return `<p class="muted">No reservations yet. Book a seat from the Book tab.</p>`;
+ return `<div class="scroll"><table><tr>${admin?"<th>Student</th>":""}<th>Seat</th><th>Date</th><th>Time</th><th>Status</th><th></th></tr>`+list.map(r=>{
+  const seat=db.seats.find(s=>s.id===r.seatId),st=db.students.find(s=>s.id===r.studentId);
+  const can=r.status==="active"&&!isPast(r.date,r.slot);
+  return `<tr>${admin?`<td>${st?esc(st.name):"(removed)"}</td>`:""}<td>${seat?esc(seat.label):"(removed)"}</td><td>${r.date}</td><td>${slotOf(r.slot).label}</td><td><span class="tag ${r.status==="active"?"":"x"}">${r.status}</span></td><td>${can?`<button class="danger" data-act="cancel" data-id="${r.id}">Cancel</button>`:""}</td></tr>`}).join("")+`</table></div>`;
+}
+const byDate=l=>l.slice().sort((a,b)=>(b.date+b.slot).localeCompare(a.date+a.slot));
+function mineView(){
+ const mine=db.reservations.filter(r=>r.studentId===S.user.id);
+ const up=mine.filter(r=>r.status==="active"&&!isPast(r.date,r.slot));
+ return `<div class="card"><h2>Upcoming</h2>${resTable(byDate(up),false)}</div><div class="card"><h2>History</h2>${resTable(byDate(mine),false)}</div>`;
+}
+function reportView(){
+ const all=db.reservations,a=active();
+ const perSeat=db.seats.map(s=>({s,n:all.filter(r=>r.seatId===s.id&&r.status==="active").length})).sort((x,y)=>y.n-x.n);
+ const mx=Math.max(1,...perSeat.map(x=>x.n));
+ const todayN=a.filter(r=>r.date===today()).length;
+ return `<div class="card"><h2>Report</h2><div class="stats">
+ <div class="stat"><b>${all.length}</b>Total bookings</div><div class="stat"><b>${a.length}</b>Active</div>
+ <div class="stat"><b>${all.length-a.length}</b>Cancelled</div><div class="stat"><b>${todayN}</b>Booked today</div></div>
+ <h3>Bookings by time slot</h3>${SLOTS.map(sl=>{const n=a.filter(r=>r.slot===sl.id).length;return `<div>${sl.label} <span class="muted">(${n})</span><div class="bar"><div style="width:${a.length?n/a.length*100:0}%"></div></div></div>`}).join("")}
+ <h3 style="margin-top:16px">Most used seats</h3>${perSeat.slice(0,8).map(x=>`<div>${esc(x.s.label)} <span class="muted">(${x.n})</span><div class="bar"><div style="width:${x.n/mx*100}%"></div></div></div>`).join("")}</div>`;
+}
+function seatsAdmin(){
+ return `<div class="card"><h2>Add a seat</h2><div class="row"><div><label for="nl">Seat label</label><input id="nl" placeholder="E1"></div><div><label for="nz">Zone</label><input id="nz" placeholder="Reading hall" value="Reading hall"></div><div><button data-act="addseat">Add seat</button></div></div></div>
+ <div class="card"><h2>Seats (${db.seats.length})</h2><div class="scroll"><table><tr><th>Seat</th><th>Zone</th><th></th></tr>`+db.seats.map(s=>`<tr><td>${esc(s.label)}</td><td>${esc(s.zone)}</td><td><button class="danger" data-act="delseat" data-id="${s.id}">Remove</button></td></tr>`).join("")+`</table></div></div>`;
+}
+function studentsAdmin(){
+ return `<div class="card"><h2>Students (${db.students.length})</h2>`+(db.students.length?`<div class="scroll"><table><tr><th>Name</th><th>Student ID</th><th></th></tr>`+db.students.map(s=>`<tr><td>${esc(s.name)}</td><td>${esc(s.sid)}</td><td><button class="danger" data-act="delstu" data-id="${s.id}">Remove</button></td></tr>`).join("")+`</table></div>`:`<p class="muted">No students have registered yet.</p>`)+`</div>`;
+}
+function authView(){
+ const adm=S.adminLogin;
+ return `<div class="card" style="max-width:420px;margin:8vh auto 0"><h1>Library Seat Reservation</h1><p class="muted">${adm?"Administrator sign in":"Reserve a seat before you walk in."}</p>
+ ${adm?"":`<div class="tabs"><button class="${S.mode==="login"?"on":""}" data-act="mode" data-id="login">Log in</button><button class="${S.mode==="reg"?"on":""}" data-act="mode" data-id="reg">Register</button></div>`}
+ ${S.mode==="reg"&&!adm?`<label for="nm">Full name</label><input id="nm" autocomplete="name">`:""}
+ <label for="u">${adm?"Username":"Student ID"}</label><input id="u" autocomplete="username">
+ <label for="p">Password</label><input id="p" type="password" autocomplete="current-password">
+ <p><button data-act="${adm?"adminlogin":S.mode==="reg"?"register":"login"}">${adm?"Sign in as admin":S.mode==="reg"?"Create account":"Log in"}</button></p>
+ <p><button class="ghost" data-act="toggleadmin">${adm?"Student login":"Admin login"}</button></p>
+ ${adm?`<p class="muted">Demo admin: admin / admin123</p>`:""}</div>`;
+}
+function fixSlot(){
+ if(!isPast(S.date,S.slot))return;
+ const f=SLOTS.find(s=>!isPast(S.date,s.id));
+ if(f){S.slot=f.id;return}
+ const d=new Date();d.setDate(d.getDate()+1);
+ S.date=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+ S.slot=SLOTS[0].id;S.sel=null;
+ if(S.user&&!S.admin&&!S.msg)S.msg="No slots left today, so tomorrow's seats are shown.";
+}
+function render(){
+ fixSlot();
+ const keep=document.activeElement&&document.activeElement.id;
+ let h="";
+ if(!S.user&&!S.admin)h=(S.msg?`<div class="msg ${S.err?"err":""}" role="status">${esc(S.msg)}</div>`:"")+authView();
+ else{
+  const tabs=S.admin?[["seatsA","Seats"],["resA","Reservations"],["stuA","Students"],["rep","Report"]]:[["book","Book a seat"],["mine","My reservations"]];
+  if(!tabs.some(t=>t[0]===S.tab))S.tab=tabs[0][0];
+  h=`<header><div><h1>Library Seat Reservation</h1><span class="muted">${S.admin?"Administrator":"Signed in as "+esc(S.user.name)+" ("+esc(S.user.sid)+")"}</span></div><button class="ghost" data-act="logout">Log out</button></header>
+  <div class="tabs">${tabs.map(t=>`<button class="${S.tab===t[0]?"on":""}" data-act="tab" data-id="${t[0]}">${t[1]}</button>`).join("")}</div>
+  ${S.msg?`<div class="msg ${S.err?"err":""}" role="status">${esc(S.msg)}</div>`:""}`;
+  h+=S.tab==="book"?bookView():S.tab==="mine"?mineView():S.tab==="seatsA"?seatsAdmin():S.tab==="resA"?`<div class="card"><h2>All reservations</h2>${resTable(byDate(db.reservations),true)}</div>`:S.tab==="stuA"?studentsAdmin():reportView();
+ }
+ document.getElementById("app").innerHTML=h;
+ S.msg=null;
+ if(keep){const e=document.getElementById(keep);if(e&&e.tagName==="INPUT"&&e.type!=="date")e.focus()}
+}
+const val=id=>(document.getElementById(id)||{value:""}).value.trim();
+document.addEventListener("click",e=>{
+ const b=e.target.closest("[data-act]");if(!b||b.tagName==="INPUT"||b.tagName==="SELECT")return;
+ const a=b.dataset.act,id=+b.dataset.id;
+ if(a==="pick")S.sel=S.sel===id?null:id;
+ else if(a==="book")book();
+ else if(a==="cancel")cancel(id);
+ else if(a==="tab"){S.tab=b.dataset.id;S.sel=null}
+ else if(a==="mode"){S.mode=b.dataset.id}
+ else if(a==="toggleadmin"){S.adminLogin=!S.adminLogin}
+ else if(a==="logout"){S.user=null;S.admin=false;S.sel=null;S.tab="book";S.adminLogin=false}
+ else if(a==="register"){
+  const n=val("nm"),u=val("u"),p=document.getElementById("p").value;
+  if(!n||!u||p.length<4)flash("Enter your name, student ID and a password of at least 4 characters.",1);
+  else if(db.students.some(s=>s.sid.toLowerCase()===u.toLowerCase()))flash("That student ID is already registered. Log in instead.",1);
+  else{const st={id:db.nid++,name:n,sid:u,pass:p};db.students.push(st);save();S.user=st;S.tab="book"}
+ }
+ else if(a==="login"){
+  const u=val("u"),p=document.getElementById("p").value;
+  const st=db.students.find(s=>s.sid.toLowerCase()===u.toLowerCase()&&s.pass===p);
+  if(st){S.user=st;S.tab="book"}else flash("Student ID or password is incorrect.",1);
+ }
+ else if(a==="adminlogin"){
+  if(val("u")===ADMIN.user&&document.getElementById("p").value===ADMIN.pass){S.admin=true;S.user={name:"Admin"};S.tab="seatsA"}else flash("Admin username or password is incorrect.",1);
+ }
+ else if(a==="addseat"){
+  const l=val("nl"),z=val("nz")||"Reading hall";
+  if(!l)flash("Enter a seat label.",1);
+  else if(db.seats.some(s=>s.label.toLowerCase()===l.toLowerCase()))flash("A seat with that label already exists.",1);
+  else{db.seats.push({id:db.nid++,label:l,zone:z});save();flash("Seat "+l+" added.")}
+ }
+ else if(a==="delseat"){
+  if(active().some(r=>r.seatId===id&&!isPast(r.date,r.slot)))flash("This seat has upcoming reservations. Cancel them first.",1);
+  else{db.seats=db.seats.filter(s=>s.id!==id);save();flash("Seat removed.")}
+ }
+ else if(a==="delstu"){
+  db.reservations.forEach(r=>{if(r.studentId===id&&r.status==="active")r.status="cancelled"});
+  db.students=db.students.filter(s=>s.id!==id);save();flash("Student removed and their active reservations cancelled.")
+ }
+ render();
+});
+document.addEventListener("change",e=>{
+ const a=e.target.dataset.act;
+ if(a==="date"){S.date=e.target.value||today();if(isPast(S.date,S.slot)){const f=SLOTS.find(s=>!isPast(S.date,s.id));if(f)S.slot=f.id}S.sel=null;render()}
+ if(a==="slot"){S.slot=e.target.value;S.sel=null;render()}
+});
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.tagName==="INPUT"&&!S.user&&!S.admin){const go=document.querySelector('[data-act="login"],[data-act="register"],[data-act="adminlogin"]');if(go)go.click()}});
+render();
+</script>
+</body>
+</html>
